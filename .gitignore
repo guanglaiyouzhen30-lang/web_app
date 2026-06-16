@@ -1,0 +1,6 @@
+# OSの自動生成ファイル
+.DS_Store
+Thumbs.db
+
+# エディタ（VSCodeなど）の設定ファイル（共有したくない場合）
+.vscode/
