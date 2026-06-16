@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
-// APIから受け取るデータの型定義
 interface ReceiptItem {
 name: string;
 price: number;
@@ -17,11 +16,10 @@ interface SummaryResponse {
 year: number;
 month: number;
 monthly_total: number;
-daily_data: { [key: string]: DailyData }; // APIからのキーは文字列になります
+daily_data: { [key: string]: DailyData };
 }
 
 export const ReceiptsHome: React.FC = () => {
-// 現在の日付を基準に初期化
 const today = new Date();
 const [year, setYear] = useState(today.getFullYear());
 const [month, setMonth] = useState(today.getMonth() + 1);
@@ -30,17 +28,23 @@ const [selectedDate, setSelectedDate] = useState<number | null>(today.getDate())
 const [summary, setSummary] = useState<SummaryResponse | null>(null);
 const [isLoading, setIsLoading] = useState(true);
 
-// 年・月が変わるたびにDjangoのAPIからデータを取得する
 useEffect(() => {
 const fetchSummary = async () => {
     setIsLoading(true);
     try {
     const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/receipts/summary/?year=${year}&month=${month}`);
-    if (!response.ok) throw new Error('データの取得に失敗しました');
+    
+    if (!response.ok) {
+        setSummary({ year, month, monthly_total: 0, daily_data: {} });
+        return;
+    }
+    
     const data = await response.json();
     setSummary(data);
     } catch (error) {
     console.error(error);
+    // 👇 ネットワークエラーなどの場合も画面をリセットする
+    setSummary({ year, month, monthly_total: 0, daily_data: {} });
     } finally {
     setIsLoading(false);
     }
@@ -48,15 +52,15 @@ const fetchSummary = async () => {
 fetchSummary();
 }, [year, month]);
 
-// 月を切り替える関数
 const handlePrevMonth = () => {
 if (month === 1) {
+
     setYear(year - 1);
     setMonth(12);
 } else {
     setMonth(month - 1);
 }
-setSelectedDate(null); // 月を移動したら選択状態をリセット
+setSelectedDate(null);
 };
 
 const handleNextMonth = () => {
@@ -70,17 +74,24 @@ setSelectedDate(null);
 };
 
 if (isLoading && !summary) {
-return <div style={{ textAlign: 'center', padding: '50px', color: '#666' }}>データを読み込み中...</div>;
+return (
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400 font-sans tracking-widest text-sm">
+    <div className="animate-pulse">LOADING DATA...</div>
+    </div>
+);
 }
 
 const daysInMonth = new Date(year, month, 0).getDate();
 const firstDayOfWeek = new Date(year, month - 1, 1).getDay();
 
-const emptyCells = Array.from({ length: firstDayOfWeek }).map((_, i) => <div key={`empty-${i}`} style={cellStyle}></div>);
+// 空白セルの生成
+const emptyCells = Array.from({ length: firstDayOfWeek }).map((_, i) => (
+<div key={`empty-${i}`} className="h-20 border-b border-r border-slate-800/30"></div>
+));
 
+// 日付セルの生成
 const dayCells = Array.from({ length: daysInMonth }).map((_, i) => {
 const day = i + 1;
-// Djangoから送られてきた daily_data はキーが文字列 ("1", "2"...) になっているため String(day) でアクセス
 const dayData = summary?.daily_data[String(day)];
 const isSelected = selectedDate === day;
 
@@ -88,28 +99,20 @@ return (
     <div 
     key={day} 
     onClick={() => setSelectedDate(day)}
-    style={{
-        ...cellStyle,
-        backgroundColor: isSelected ? '#fdf2f2' : 'transparent',
-        cursor: 'pointer',
-        border: isSelected ? '1px solid #e60012' : '1px solid transparent',
-        borderRight: '1px solid #e5e5e5',
-        borderBottom: '1px solid #e5e5e5',
-    }}
+    className={`h-20 p-2 flex flex-col justify-between border-b border-r border-slate-800/50 cursor-pointer transition-all duration-200 select-none
+        ${isSelected 
+        ? 'bg-cyan-500/10 relative after:absolute after:inset-0 after:border after:border-cyan-500/60 after:rounded-lg' 
+        : 'hover:bg-slate-800/40'
+        }`}
     >
-    <div style={{
-        display: 'inline-block',
-        width: '24px', height: '24px',
-        lineHeight: '24px', textAlign: 'center',
-        backgroundColor: isSelected ? '#e60012' : 'transparent',
-        color: isSelected ? '#fff' : '#333', 
-        fontSize: '14px', marginBottom: '4px',
-        fontWeight: isSelected ? 'bold' : 'normal',
-        borderRadius: '2px'
-    }}>
+    <div className={`w-6 h-6 flex items-center justify-center text-xs rounded font-medium tracking-tighter
+        ${isSelected ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400'}`}
+    >
         {day}
     </div>
-    <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#111' }}>
+    <div className={`text-[11px] font-bold text-right tracking-tight transition-colors
+        ${isSelected ? 'text-cyan-400' : 'text-slate-200'}`}
+    >
         {dayData ? `¥${dayData.total.toLocaleString()}` : ''}
     </div>
     </div>
@@ -119,132 +122,110 @@ return (
 const selectedData = selectedDate ? summary?.daily_data[String(selectedDate)] : null;
 
 return (
-<div style={{ padding: '0', maxWidth: '600px', margin: '0 auto', backgroundColor: '#f5f5f5', minHeight: '100vh', fontFamily: '"Noto Sans JP", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif' }}>
+<div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-32 box-border selection:bg-cyan-500/30">
+    <div className="max-w-2xl mx-auto px-4 pt-8">
+        <div className="mb-4">
+        <Link to="/" className="inline-flex items-center text-xs font-bold text-slate-400 hover:text-white transition-all tracking-widest uppercase bg-slate-800/50 hover:bg-slate-700/50 px-4 py-2.5 rounded-xl border border-slate-700/50 hover:border-cyan-500/50 shadow-sm">
+        <span className="text-base mr-2 opacity-80">🏠</span>
+        My Life OS Portal
+        </Link>
+    </div>
     
-    {/* 1. コーポレートスタイルのヘッダー */}
-    <div style={{ 
-    position: 'relative',
-    backgroundColor: '#fff', 
-    color: '#111', 
-    padding: '40px 20px 30px',
-    textAlign: 'center', 
-    borderTop: '6px solid #e60012', 
-    boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-    }}>
-    <Link to="/" style={{ 
-        position: 'absolute', 
-        top: '20px', 
-        left: '20px', 
-        textDecoration: 'none', 
-        color: '#666', 
-        fontSize: '13px',
-        fontWeight: 'bold',
-        letterSpacing: '1px'
-    }}>
-        &lt; ポータルへ
-    </Link>
+    {/* 1. 高級感のあるグラスモーフィズムヘッダー */}
+    <div className="relative bg-slate-800/40 backdrop-blur-md border border-slate-700/30 rounded-2xl p-6 mb-6 shadow-xl">
 
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <span onClick={handlePrevMonth} style={{ cursor: 'pointer', color: '#666', fontSize: '14px', padding: '10px' }}>&lt; 先月</span>
-        <h2 style={{ margin: '0', fontSize: '18px', fontWeight: 'bold', letterSpacing: '2px' }}>{year}年 {month}月</h2>
-        <span onClick={handleNextMonth} style={{ cursor: 'pointer', color: '#666', fontSize: '14px', padding: '10px' }}>来月 &gt;</span>
-    </div>
-    <div style={{ fontSize: '13px', color: '#666', marginBottom: '5px', letterSpacing: '1px' }}>今月の支出合計</div>
-    <div style={{ fontSize: '38px', fontWeight: 'bold', color: '#e60012', fontFamily: 'Arial, sans-serif' }}>
-        <span style={{ fontSize: '20px', marginRight: '4px', color: '#111' }}>¥</span>
-        {summary?.monthly_total ? summary.monthly_total.toLocaleString() : '0'}
-    </div>
+        <div className="flex justify-between items-center mb-6 mt-4">
+        <button onClick={handlePrevMonth} className="text-xs font-bold text-slate-400 hover:text-slate-200 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700/30 transition-all select-none">&lt; PREV</button>
+        <h2 className="text-xl font-bold tracking-widest text-white">{year} / {String(month).padStart(2, '0')}</h2>
+        <button onClick={handleNextMonth} className="text-xs font-bold text-slate-400 hover:text-slate-200 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700/30 transition-all select-none">NEXT &gt;</button>
+        </div>
+        
+        <div className="text-center">
+        <div className="text-xs text-slate-400 mb-1 tracking-widest uppercase">Monthly Total Expenditure</div>
+        <div className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 font-mono">
+            <span className="text-lg mr-1 text-slate-300 font-sans font-normal">¥</span>
+            {summary?.monthly_total ? summary.monthly_total.toLocaleString() : '0'}
+        </div>
+        </div>
     </div>
 
-    {/* 2. シャープなカレンダーエリア */}
-    <div style={{ margin: '20px', backgroundColor: '#fff', border: '1px solid #ddd', padding: '10px' }}>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', fontSize: '12px', color: '#666', paddingBottom: '10px', borderBottom: '2px solid #111' }}>
-        <div style={{color: '#e60012'}}>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div style={{color: '#0066cc'}}>土</div>
-    </div>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderTop: '1px solid #e5e5e5', borderLeft: '1px solid #e5e5e5' }}>
+    {/* 2. ミニマルでシャープなカレンダーエリア */}
+    <div className="bg-slate-800/20 border border-slate-800/60 rounded-2xl p-4 mb-8 shadow-inner">
+        <div className="grid grid-cols-7 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider pb-3 mb-2 border-b border-slate-800">
+        <div className="text-rose-400/80">SUN</div>
+        <div>MON</div>
+        <div>TUE</div>
+        <div>WED</div>
+        <div>THU</div>
+        <div>FRI</div>
+        <div className="text-cyan-400/80">SAT</div>
+        </div>
+        <div className="grid grid-cols-7 border-t border-l border-slate-800/50 rounded-lg overflow-hidden bg-slate-900/30">
         {emptyCells}
         {dayCells}
-    </div>
+        </div>
     </div>
 
-    {/* 3. クリーンな明細リスト */}
+    {/* 3. 洗練された明細リスト */}
     {selectedDate && (
-    <div style={{ padding: '0 20px 120px' }}>
-        <div style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '15px', color: '#111', borderBottom: '1px solid #ccc', paddingBottom: '10px', display: 'flex', alignItems: 'center' }}>
-        <div style={{ width: '4px', height: '16px', backgroundColor: '#e60012', marginRight: '10px' }}></div>
-        {month}月{selectedDate}日 の明細
+        <div className="mb-12 animate-fadeIn">
+        <div className="text-sm font-bold mb-4 text-slate-300 tracking-wide flex items-center">
+            <div className="w-1.5 h-4 bg-gradient-to-b from-cyan-400 to-blue-500 rounded-full mr-3"></div>
+            {month}月{selectedDate}日 の明細
         </div>
         
         {selectedData ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div className="flex flex-col gap-3">
             {selectedData.items.map((item, idx) => (
-            <div key={idx} style={{ display: 'flex', alignItems: 'center', backgroundColor: '#fff', padding: '15px', border: '1px solid #e5e5e5', transition: 'background-color 0.2s' }}>
-                <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px', display: 'inline-block', border: '1px solid #ccc', padding: '2px 6px' }}>{item.category}</div>
-                <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#111' }}>{item.name}</div>
+                <div key={idx} className="flex items-center bg-slate-800/30 backdrop-blur-sm border border-slate-800 rounded-xl p-4 transition-all hover:border-slate-700/60">
+                <div className="flex-1 min-w-0 pr-4">
+                    <div className="text-[10px] text-cyan-400 font-semibold tracking-wider uppercase bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded inline-block mb-1.5">
+                    {item.category}
+                    </div>
+                    <div className="text-sm font-bold text-slate-200 truncate">{item.name}</div>
                 </div>
-                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#111', fontFamily: 'Arial, sans-serif' }}>
-                ¥{item.price.toLocaleString()}
+                <div className="text-base font-bold text-slate-100 font-mono whitespace-nowrap">
+                    ¥{item.price.toLocaleString()}
                 </div>
-            </div>
+                </div>
             ))}
-        </div>
+            </div>
         ) : (
-        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999', fontSize: '13px', backgroundColor: '#fff', border: '1px solid #e5e5e5' }}>
-            データがありません
-        </div>
+            <div className="text-center py-10 text-xs text-slate-500 bg-slate-800/10 border border-dashed border-slate-800 rounded-xl tracking-wider">
+            NO DATA RECORDED
+            </div>
         )}
-    </div>
+        </div>
     )}
 
-    {/* 4. アプリ風ボトムナビゲーション (3分割メニュー) */}
-    <div style={{ position: 'fixed', bottom: '0', left: '0', width: '100%', backgroundColor: '#fff', borderTop: '1px solid #ddd', padding: '10px 15px', boxSizing: 'border-box', boxShadow: '0 -2px 10px rgba(0,0,0,0.05)' }}>
-    <div style={{ maxWidth: '600px', margin: '0 auto', display: 'flex', gap: '10px', height: '56px' }}>
+    {/* 4. 浮遊感のある未来的ボトムナビゲーション */}
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md bg-slate-950/70 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-2 box-border shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50">
+        <div className="flex gap-2 h-12">
         
-        <Link to="/receipts/report" style={{ flex: '1', textDecoration: 'none' }}>
-        <button style={{
-            width: '100%', height: '100%', backgroundColor: '#f8f8f8', color: '#111',
-            border: '1px solid #ccc', cursor: 'pointer',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
-        }}>
-            <div style={{ fontSize: '18px', marginBottom: '2px' }}>📊</div>
-            <div style={{ fontSize: '10px', fontWeight: 'bold' }}>レポート</div>
-        </button>
+        <Link to="/receipts/report" className="flex-1 min-w-0">
+            <button className="w-full h-full bg-transparent hover:bg-slate-800/40 text-slate-400 hover:text-slate-200 border-none rounded-xl cursor-pointer flex flex-col items-center justify-center transition-all">
+            <span className="text-lg mb-0.5">📊</span>
+            <span className="text-[9px] font-bold tracking-widest uppercase">Report</span>
+            </button>
         </Link>
 
-        <Link to="/receipts/upload" style={{ flex: '2', textDecoration: 'none' }}>
-        <button style={{
-            width: '100%', height: '100%', backgroundColor: '#e60012', color: 'white',
-            border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            letterSpacing: '1px', boxShadow: '0 2px 4px rgba(230,0,18,0.2)'
-        }}>
-            <span style={{ fontSize: '16px', fontWeight: 'bold' }}>＋ 登録</span>
-        </button>
+        <Link to="/receipts/upload" className="flex-[1.5] min-w-0">
+            <button className="w-full h-full bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 hover:from-cyan-400 hover:to-blue-500 font-extrabold border-none rounded-xl cursor-pointer flex items-center justify-center tracking-widest shadow-lg shadow-cyan-500/20 transition-all active:scale-[0.98]">
+            ＋ SCAN RECEIPT
+            </button>
         </Link>
 
-        <Link to="/categories" style={{ flex: '1', textDecoration: 'none' }}>
-        <button style={{
-            width: '100%', height: '100%', backgroundColor: '#f8f8f8', color: '#111',
-            border: '1px solid #ccc', cursor: 'pointer',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
-        }}>
-            <div style={{ fontSize: '18px', marginBottom: '2px' }}>🏷️</div>
-            <div style={{ fontSize: '10px', fontWeight: 'bold' }}>カテゴリ</div>
-        </button>
+        <Link to="/categories" className="flex-1 min-w-0">
+            <button className="w-full h-full bg-transparent hover:bg-slate-800/40 text-slate-400 hover:text-slate-200 border-none rounded-xl cursor-pointer flex flex-col items-center justify-center transition-all">
+            <span className="text-lg mb-0.5">🏷️</span>
+            <span className="text-[9px] font-bold tracking-widest uppercase">Category</span>
+            </button>
         </Link>
 
-    </div>
+        </div>
     </div>
 
+    </div>
 </div>
 );
-};
-
-const cellStyle: React.CSSProperties = {
-height: '70px',
-display: 'flex',
-flexDirection: 'column',
-alignItems: 'center',
-paddingTop: '8px',
-boxSizing: 'border-box'
 };
